@@ -418,6 +418,223 @@
   margin: 0.3rem 0;
 }
 
+/* Estimation Module */
+.estimation-section {
+  padding-bottom: 2.5rem;
+}
+
+.estimation-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.estimation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-field label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.form-field input,
+.form-field select {
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: var(--light);
+  font-size: 1rem;
+  color: var(--text);
+  outline: none;
+  transition: all 0.3s;
+}
+
+.form-field input:focus,
+.form-field select:focus {
+  border-color: var(--primary);
+  background: white;
+}
+
+.estimation-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.estimation-option-group {
+  background: var(--light);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1rem;
+}
+
+.estimation-option-group h3 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.2rem;
+  color: var(--dark);
+  margin-bottom: 1rem;
+}
+
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+
+.checkbox-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0.9rem;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.checkbox-pill:hover {
+  border-color: var(--primary);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.05);
+}
+
+.checkbox-pill input {
+  accent-color: var(--primary);
+}
+
+.estimation-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.submit-estimation-btn {
+  padding: 1rem 1.5rem;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.submit-estimation-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(212, 105, 28, 0.28);
+}
+
+.submit-estimation-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.estimation-results {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: white;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+}
+
+.estimation-results h3 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.6rem;
+  color: var(--dark);
+  margin-bottom: 1rem;
+}
+
+.result-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.result-card {
+  background: var(--light);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.result-card.highlight {
+  background: rgba(212, 105, 28, 0.08);
+  border-color: rgba(212, 105, 28, 0.2);
+}
+
+.result-label {
+  font-size: 0.85rem;
+  color: var(--text-light);
+  font-weight: 600;
+}
+
+.result-value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--dark);
+}
+
+.result-summary-table {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  border-radius: 10px;
+  background: var(--light);
+}
+
+.summary-row span {
+  color: var(--text-light);
+  font-weight: 600;
+}
+
+.summary-row strong {
+  color: var(--dark);
+  text-align: right;
+}
+
+.estimation-alert {
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 768px) {
+  .estimation-actions {
+    justify-content: stretch;
+  }
+
+  .submit-estimation-btn {
+    width: 100%;
+  }
+
+  .summary-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .summary-row strong {
+    text-align: left;
+  }
+}
+
 .history-details {
   color: var(--text-light);
   font-size: 0.95rem;
@@ -755,4 +972,230 @@
 .status-badge.estimated {
   background: rgba(156, 39, 176, 0.2);
   color: #7B1FA2;
+}
+
+/* Estimation Modal - Auto-filled from Property */
+.estimation-modal-large {
+  max-width: 1000px;
+}
+
+.estimation-info-box {
+  background: linear-gradient(135deg, rgba(212, 105, 28, 0.1), rgba(244, 208, 63, 0.1));
+  padding: 1.5rem;
+  border-radius: 12px;
+  border-left: 4px solid var(--primary);
+  margin-bottom: 2rem;
+}
+
+.estimation-info-box p {
+  margin: 0.4rem 0;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.estimation-form {
+  margin-bottom: 2rem;
+}
+
+.estimation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-field label {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.form-field input,
+.form-field select {
+  padding: 0.8rem;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  font-size: 1rem;
+  font-family: inherit;
+  transition: border-color 0.3s;
+}
+
+.form-field input:focus,
+.form-field select:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: rgba(212, 105, 28, 0.02);
+}
+
+.estimation-options {
+  margin-bottom: 2rem;
+}
+
+.estimation-option-group {
+  margin-bottom: 1.5rem;
+}
+
+.estimation-option-group h3 {
+  font-size: 1rem;
+  color: var(--dark);
+  margin-bottom: 1rem;
+  font-weight: 600;
+}
+
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.8rem;
+}
+
+.checkbox-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.8rem;
+  background: var(--light);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s;
+  user-select: none;
+}
+
+.checkbox-pill:hover {
+  background: rgba(212, 105, 28, 0.1);
+}
+
+.checkbox-pill input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
+.checkbox-pill input:checked + span {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.checkbox-pill span {
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.estimation-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+}
+
+.submit-estimation-btn {
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  color: white;
+  border: none;
+  padding: 1rem 2rem;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.submit-estimation-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(212, 105, 28, 0.4);
+}
+
+.submit-estimation-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.estimation-results {
+  background: var(--light);
+  padding: 2rem;
+  border-radius: 15px;
+  margin-top: 2rem;
+}
+
+.estimation-results h3 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.5rem;
+  color: var(--dark);
+  margin-bottom: 1.5rem;
+}
+
+.result-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.result-card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  text-align: center;
+  border: 2px solid var(--border);
+  transition: all 0.3s;
+}
+
+.result-card:hover {
+  border-color: var(--primary);
+  box-shadow: 0 5px 20px rgba(212, 105, 28, 0.1);
+}
+
+.result-card.highlight {
+  background: linear-gradient(135deg, rgba(212, 105, 28, 0.05), rgba(244, 208, 63, 0.05));
+  border-color: var(--primary);
+}
+
+.result-label {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--text-light);
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.result-value {
+  display: block;
+  font-size: 1.4rem;
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.result-summary-table {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid var(--border);
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+}
+
+.summary-row:last-child {
+  border-bottom: none;
+}
+
+.summary-row span {
+  color: var(--text-light);
+  font-weight: 500;
+}
+
+.summary-row strong {
+  color: var(--dark);
+  font-weight: 600;
 }

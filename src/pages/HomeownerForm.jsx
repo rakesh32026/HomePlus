@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import './HomeownerForm.css';
+import { api } from "../api";
 
 const HomeownerForm = () => {
   const navigate = useNavigate();
@@ -108,34 +109,62 @@ const HomeownerForm = () => {
     navigate('/');
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    
-    // Generate unique submission ID
-    const submissionId = `propertySubmission_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    // Prepare submission data with owner information
-    const submissionData = {
-      ...formData,
-      improvements: selectedImprovements,
-      imageCount: images.length,
-      ownerName: userData?.fullName || 'Homeowner',
-      ownerEmail: userData?.email || localStorage.getItem('userEmail'),
-      submissionDate: new Date().toISOString(),
-      status: 'Pending Review'
-    };
-    
-    // Save to localStorage with unique key for admin to access
-    localStorage.setItem(submissionId, JSON.stringify(submissionData));
-    
-    // Also save as current user's property data (per user email)
-    const userEmail = userData?.email || localStorage.getItem('userEmail');
-    localStorage.setItem(`propertyData_${userEmail}`, JSON.stringify(submissionData));
-    localStorage.setItem('propertyData', JSON.stringify(submissionData));
-    
-    // Redirect to dashboard
-    navigate('/homeowner-dashboard');
+const handleSubmit = async (e) => {
+  e.preventDefault();
+
+  const storedUserData = localStorage.getItem("userData");
+  const user = storedUserData ? JSON.parse(storedUserData) : null;
+  const userEmail = localStorage.getItem("userEmail") || user?.email;
+
+  if (!userEmail) {
+    alert("User session missing email. Please login again.");
+    navigate('/login?type=homeowner');
+    return;
+  }
+
+  // ✅ Prepare data for backend
+  const propertyData = {
+    ...formData,
+    propertyValue: parseFloat(formData.propertyValue),
+    propertyAge: parseInt(formData.propertyAge, 10),
+    builtUpArea: parseFloat(formData.builtUpArea),
+    improvements: selectedImprovements,
+    imageCount: images.length,
+    ownerName: user?.fullName || "Homeowner",
+    ownerEmail: userEmail,
   };
+
+  try {
+    const createdProperty = await api.createProperty(propertyData);
+    const propertyForDashboard = {
+      ...createdProperty,
+      improvements: selectedImprovements,
+    };
+
+    // Keep dashboard and history in sync immediately after submission.
+    localStorage.setItem(`propertyData_${userEmail}`, JSON.stringify(propertyForDashboard));
+
+    const existingHistory = JSON.parse(localStorage.getItem(`homeownerHistory_${userEmail}`) || '[]');
+    const submissionEntry = {
+      id: `submission_${propertyForDashboard.id || Date.now()}`,
+      action: 'Submission',
+      details: `Property details submitted for ${propertyForDashboard.city || formData.city}`,
+      timestamp: propertyForDashboard.submissionDate || new Date().toISOString(),
+      propertyDetails: propertyForDashboard,
+    };
+    localStorage.setItem(
+      `homeownerHistory_${userEmail}`,
+      JSON.stringify([submissionEntry, ...existingHistory])
+    );
+
+    // ✅ Redirect after success
+    navigate("/homeowner-dashboard");
+
+  } catch (err) {
+    console.error(err);
+    alert("Submission failed");
+  }
+};
 
   return (
     <div className="homeowner-form-page">

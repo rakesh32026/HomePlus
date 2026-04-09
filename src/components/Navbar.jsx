@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import { api } from '../api';
 import './Navbar.css';
 
 const Navbar = ({ 
@@ -23,15 +24,11 @@ const Navbar = ({
   }, [isScrollable]);
 
   const handleLogout = () => {
+    api.logout();
     if (onLogout) {
       onLogout();
-    } else {
-      localStorage.removeItem('isLoggedIn');
-      localStorage.removeItem('userData');
-      localStorage.removeItem('userType');
-      localStorage.removeItem('userEmail');
-      navigate('/');
     }
+    navigate('/');
   };
 
   return (

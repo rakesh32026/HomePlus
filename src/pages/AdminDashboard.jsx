@@ -1,14 +1,162 @@
 import { useNavigate, Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import './AdminDashboard.css';
+import { api } from "../api";
+import { useAuthSession } from '../hooks/useAuthSession';
+
+const ESTIMATION_LOCATION_OPTIONS = [
+  { label: 'Prime city', value: 'prime-city' },
+  { label: 'Normal area', value: 'normal-area' },
+  { label: 'Remote area', value: 'remote-area' },
+];
+
+const ESTIMATION_AGE_OPTIONS = [
+  { label: '0–5 years', value: '0-5' },
+  { label: '5–15 years', value: '5-15' },
+  { label: 'Above 15 years', value: 'above-15' },
+];
+
+const ESTIMATION_AMENITIES = [
+  { label: 'Parking', value: 'parking' },
+  { label: 'Security', value: 'security' },
+  { label: 'Lift', value: 'lift' },
+  { label: 'Garden / Balcony', value: 'garden-balcony' },
+  { label: 'Smart Home', value: 'smart-home' },
+];
+
+const ESTIMATION_IMPROVEMENTS = [
+  { label: 'Modular Kitchen', value: 'modular-kitchen' },
+  { label: 'Interior Design', value: 'interior-design' },
+  { label: 'Painting', value: 'painting' },
+  { label: 'Flooring Upgrade', value: 'flooring-upgrade' },
+  { label: 'Bathroom Upgrade', value: 'bathroom-upgrade' },
+  { label: 'Solar Panels', value: 'solar-panels' },
+];
+
+const IMPROVEMENT_TO_AMENITIES = {
+  'solar-panels': ['smart-home'],
+  'modular-kitchen': ['security'],
+  'bathroom-upgrade': [],
+  'painting': [],
+  'flooring-upgrade': ['garden-balcony'],
+  'interior-design': ['smart-home'],
+};
+
+const normalizeSelectionKey = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+const toValueLookup = (options) => {
+  const lookup = {};
+  options.forEach((option) => {
+    lookup[normalizeSelectionKey(option.value)] = option.value;
+    lookup[normalizeSelectionKey(option.label)] = option.value;
+  });
+  return lookup;
+};
+
+const IMPROVEMENT_VALUE_LOOKUP = {
+  ...toValueLookup(ESTIMATION_IMPROVEMENTS),
+  'kitchen renovation': 'modular-kitchen',
+  'wall painting': 'painting',
+  'flooring replacement': 'flooring-upgrade',
+  'modular kitchen': 'modular-kitchen',
+  'bathroom upgrade': 'bathroom-upgrade',
+  'solar panels': 'solar-panels',
+  'interior design': 'interior-design',
+  'living room makeover': 'interior-design',
+  'bedroom enhancement': 'interior-design',
+  'wardrobes installation': 'interior-design',
+  'false ceiling': 'interior-design',
+  'lighting enhancement': 'interior-design',
+  'door upgrades': 'interior-design',
+  'window replacement': 'interior-design',
+};
+
+const AMENITY_VALUE_LOOKUP = {
+  ...toValueLookup(ESTIMATION_AMENITIES),
+  'garden balcony': 'garden-balcony',
+  'smart home': 'smart-home',
+};
+
+const RAW_IMPROVEMENT_TO_AMENITIES = {
+  'home automation': ['smart-home'],
+  'security systems': ['security'],
+  'balcony renovation': ['garden-balcony'],
+  'modular kitchen': ['security'],
+  'interior design': ['smart-home'],
+  'solar panels': ['smart-home'],
+};
+
+const parseIncomingSelections = (values) => {
+  if (Array.isArray(values)) return values;
+
+  if (typeof values === 'string') {
+    return values
+      .split(/[|,]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  if (values && typeof values === 'object') {
+    return Object.keys(values).filter(Boolean);
+  }
+
+  return [];
+};
+
+const guessImprovementFromKeyword = (rawValue) => {
+  const text = normalizeSelectionKey(rawValue);
+
+  if (!text) return null;
+  if (/(kitchen)/.test(text)) return 'modular-kitchen';
+  if (/(bathroom)/.test(text)) return 'bathroom-upgrade';
+  if (/(paint)/.test(text)) return 'painting';
+  if (/(floor)/.test(text)) return 'flooring-upgrade';
+  if (/(solar)/.test(text)) return 'solar-panels';
+  if (/(interior|living room|bedroom|wardrobe|false ceiling|lighting|window|door|balcony|terrace)/.test(text)) return 'interior-design';
+
+  return null;
+};
+
+const mapIncomingImprovements = (values) => {
+  const parsedValues = parseIncomingSelections(values);
+
+  const mapped = parsedValues
+    .map((value) => IMPROVEMENT_VALUE_LOOKUP[normalizeSelectionKey(value)] || guessImprovementFromKeyword(value))
+    .filter(Boolean);
+
+  return Array.from(new Set(mapped));
+};
+
+const mapIncomingSelections = (values, lookup) => {
+  const parsedValues = parseIncomingSelections(values);
+
+  const mapped = parsedValues
+    .map((value) => lookup[normalizeSelectionKey(value)])
+    .filter(Boolean);
+
+  return Array.from(new Set(mapped));
+};
+
+const formatRupees = (value) =>
+  new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const { session, isAuthenticated, hasRole, clearSession } = useAuthSession();
   const [userData, setUserData] = useState(null);
   const [propertySubmissions, setPropertySubmissions] = useState([]);
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showEstimateModal, setShowEstimateModal] = useState(false);
+  const [showEstimationModal, setShowEstimationModal] = useState(false);
   const [adminHistory, setAdminHistory] = useState([]);
   const [activeTab, setActiveTab] = useState('submissions');
   const [estimateData, setEstimateData] = useState({
@@ -18,6 +166,19 @@ const AdminDashboard = () => {
     estimatedNewValue: '',
     adminNotes: ''
   });
+  const [estimationForm, setEstimationForm] = useState({
+    propertyTitle: '',
+    locationType: '',
+    areaSqFt: '',
+    basePricePerSqFt: '',
+    propertyAgeBand: '',
+    amenities: [],
+    improvements: [],
+  });
+  const [estimationResult, setEstimationResult] = useState(null);
+  const [estimationLoading, setEstimationLoading] = useState(false);
+  const [estimationError, setEstimationError] = useState('');
+  const [estimationSuccess, setEstimationSuccess] = useState('');
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalProperties: 0,
@@ -37,28 +198,49 @@ const AdminDashboard = () => {
     return typeMap[type] || type;
   };
 
+  const normalizeProperty = (property) => ({
+    ...property,
+    ownerName:
+      property.ownerName ||
+      (property.ownerEmail ? property.ownerEmail.split('@')[0] : 'Homeowner'),
+    submissionDate: property.submissionDate || new Date().toISOString(),
+  });
+
+  const updateStats = (submissions) => {
+    const totalProperties = submissions.length;
+    const uniqueUsers = new Set(submissions.map((s) => s.ownerEmail).filter(Boolean)).size;
+    const pendingCount = submissions.filter((s) => s.status === 'Pending Review').length;
+    const approvedCount = submissions.filter(
+      (s) => s.status === 'Approved' || s.status === 'Estimated'
+    ).length;
+
+    setStats({
+      totalUsers: uniqueUsers,
+      totalProperties,
+      completed: approvedCount,
+      inProgress: pendingCount,
+    });
+  };
+
   useEffect(() => {
-    // Check if user is logged in
-    const isLoggedIn = localStorage.getItem('isLoggedIn');
-    const userType = localStorage.getItem('userType');
-    
-    if (!isLoggedIn || userType !== 'admin') {
+    if (!isAuthenticated || !hasRole('admin')) {
       navigate('/login?type=admin');
       return;
     }
 
-    // Load user data
-    const storedUserData = localStorage.getItem('userData');
-    if (storedUserData) {
-      setUserData(JSON.parse(storedUserData));
+    if (session.userData) {
+      setUserData(session.userData);
     }
 
-    // Load property submissions
-    loadPropertySubmissions();
-    loadAdminHistory();
-  }, [navigate]);
+    const initializeDashboard = async () => {
+      await loadPropertySubmissions();
+      loadAdminHistory();
+    };
 
-  const loadPropertySubmissions = () => {
+    initializeDashboard();
+  }, [navigate, isAuthenticated, hasRole, session.userData]);
+
+  const loadPropertySubmissionsFromLocal = () => {
     const submissions = [];
     const keys = Object.keys(localStorage);
     
@@ -79,18 +261,21 @@ const AdminDashboard = () => {
 
     submissions.sort((a, b) => new Date(b.submissionDate) - new Date(a.submissionDate));
     setPropertySubmissions(submissions);
+    updateStats(submissions);
+  };
 
-    const totalProperties = submissions.length;
-    const uniqueUsers = new Set(submissions.map(s => s.ownerEmail)).size;
-    const pendingCount = submissions.filter(s => s.status === 'Pending Review').length;
-    const approvedCount = submissions.filter(s => s.status === 'Approved' || s.status === 'Estimated').length;
+  const loadPropertySubmissions = async () => {
+    try {
+      const data = await api.getAllProperties();
+      const normalized = (Array.isArray(data) ? data : [])
+        .map(normalizeProperty)
+        .sort((a, b) => new Date(b.submissionDate) - new Date(a.submissionDate));
 
-    setStats({
-      totalUsers: uniqueUsers,
-      totalProperties: totalProperties,
-      completed: approvedCount,
-      inProgress: pendingCount
-    });
+      setPropertySubmissions(normalized);
+      updateStats(normalized);
+    } catch (error) {
+      loadPropertySubmissionsFromLocal();
+    }
   };
 
   const loadAdminHistory = () => {
@@ -113,31 +298,58 @@ const AdminDashboard = () => {
     setAdminHistory(history.slice(0, 50));
   };
 
-  const handleRefresh = () => {
-    loadPropertySubmissions();
+  const handleRefresh = async () => {
+    await loadPropertySubmissions();
     loadAdminHistory();
   };
 
-  const handleApprove = (submissionId) => {
-    const submission = propertySubmissions.find(s => s.id === submissionId);
-    if (submission) {
-      submission.status = 'Approved';
-      submission.approvedDate = new Date().toISOString();
-      localStorage.setItem(submissionId, JSON.stringify(submission));
-      addToHistory('Approved', submission.ownerName, `Approved property submission for ${submission.city}`);
-      loadPropertySubmissions();
-    }
-  };
 
-  const handleReject = (submissionId) => {
+
+const handleApprove = async (submissionId) => {
+  try {
+    await api.approveProperty(submissionId);
+
+    // Optional: history log (frontend only)
     const submission = propertySubmissions.find(s => s.id === submissionId);
     if (submission) {
-      submission.status = 'Rejected';
-      localStorage.setItem(submissionId, JSON.stringify(submission));
-      addToHistory('Rejected', submission.ownerName, `Rejected property submission for ${submission.city}`);
-      loadPropertySubmissions();
+      addToHistory(
+        'Approved',
+        submission.ownerName,
+        `Approved property submission for ${submission.city}`
+      );
     }
-  };
+
+    // ✅ Refresh data (BEST PRACTICE)
+    await loadPropertySubmissions();
+
+  } catch (err) {
+    console.error(err);
+    alert("Failed to approve property");
+  }
+};
+
+const handleReject = async (submissionId) => {
+  try {
+    await api.rejectProperty(submissionId);
+
+    // Optional: history log
+    const submission = propertySubmissions.find(s => s.id === submissionId);
+    if (submission) {
+      addToHistory(
+        'Rejected',
+        submission.ownerName,
+        `Rejected property submission for ${submission.city}`
+      );
+    }
+
+    // ✅ Refresh data properly (NO reload)
+    await loadPropertySubmissions();
+
+  } catch (err) {
+    console.error(err);
+    alert("Failed to reject property");
+  }
+};
 
   const handleViewDetails = (property) => {
     setSelectedProperty(property);
@@ -160,11 +372,285 @@ const AdminDashboard = () => {
     setShowEstimateModal(true);
   };
 
+  const openEstimationFromProperty = (property) => {
+    setSelectedProperty(property);
+
+    // Auto-fill estimation form from property details
+    const propertyTitle = `${formatPropertyType(property.propertyType)} in ${property.city}`;
+    const areaSqFt = property.builtUpArea || '';
+    const propertyValue = parseInt(property.propertyValue) || 0;
+    const basePricePerSqFt = areaSqFt && propertyValue ? Math.round(propertyValue / areaSqFt) : '';
+
+    // Infer property age band from property.propertyAge
+    let propertyAgeBand = '';
+    if (property.propertyAge) {
+      const age = parseInt(property.propertyAge);
+      if (age <= 5) propertyAgeBand = '0-5';
+      else if (age <= 15) propertyAgeBand = '5-15';
+      else propertyAgeBand = 'above-15';
+    }
+
+    // Infer location type from property details (if available in property.locationType)
+    let locationType = property.locationType || 'prime-city';
+
+    // Map homeowner-entered selections to estimation option values.
+    const rawImprovements = parseIncomingSelections(
+      property.improvements && parseIncomingSelections(property.improvements).length > 0
+        ? property.improvements
+        : (property.adminEstimate?.improvementCosts || [])
+    );
+    const mappedImprovements = mapIncomingImprovements(rawImprovements);
+    const mappedAmenities = mapIncomingSelections(property.amenities || [], AMENITY_VALUE_LOOKUP);
+
+    // Derive amenities from selected improvements so modal reflects homeowner intent.
+    const derivedAmenities = mappedImprovements.flatMap((improvement) => IMPROVEMENT_TO_AMENITIES[improvement] || []);
+    const derivedAmenitiesFromRaw = rawImprovements.flatMap(
+      (rawImprovement) => RAW_IMPROVEMENT_TO_AMENITIES[normalizeSelectionKey(rawImprovement)] || []
+    );
+    const finalAmenities = Array.from(new Set([...mappedAmenities, ...derivedAmenities, ...derivedAmenitiesFromRaw]));
+
+    setEstimationForm({
+      propertyTitle: propertyTitle,
+      locationType: locationType,
+      areaSqFt: areaSqFt.toString(),
+      basePricePerSqFt: basePricePerSqFt.toString(),
+      propertyAgeBand: propertyAgeBand,
+      amenities: finalAmenities,
+      improvements: mappedImprovements,
+    });
+
+    setEstimationResult(null);
+    setEstimationError('');
+    setEstimationSuccess('');
+    setShowEstimationModal(true);
+  };
+
   const handleEstimateChange = (field, value) => {
     setEstimateData(prev => ({
       ...prev,
       [field]: value
     }));
+  };
+
+  const handleEstimationChange = (field, value) => {
+    setEstimationForm(prev => ({
+      ...prev,
+      [field]: value,
+    }));
+    setEstimationError('');
+    setEstimationSuccess('');
+  };
+
+  // Mapping of amenities to improvements that complement them
+  const AMENITIES_TO_IMPROVEMENTS = {
+    'smart-home': ['solar-panels', 'interior-design'],
+    'security': ['modular-kitchen'],
+    'garden-balcony': ['flooring-upgrade', 'interior-design'],
+    'parking': [],
+    'lift': [],
+  };
+
+  const toggleEstimationSelection = (field, value) => {
+    setEstimationForm(prev => {
+      const currentValues = prev[field] || [];
+      const nextValues = currentValues.includes(value)
+        ? currentValues.filter((item) => item !== value)
+        : [...currentValues, value];
+
+      // Auto-update related field based on selection
+      let updatedForm = { ...prev, [field]: nextValues };
+
+      if (field === 'improvements') {
+        // When improvement is toggled, auto-update amenities
+        const newAmenities = new Set([...prev.amenities] || []);
+        
+        if (nextValues.includes(value)) {
+          // Adding an improvement - add related amenities
+          const relatedAmenities = IMPROVEMENT_TO_AMENITIES[value] || [];
+          relatedAmenities.forEach(amenity => newAmenities.add(amenity));
+        } else {
+          // Removing an improvement - check if amenity should be removed
+          const relatedAmenities = IMPROVEMENT_TO_AMENITIES[value] || [];
+          relatedAmenities.forEach(amenity => {
+            // Only remove if no other improvement needs this amenity
+            const stillNeeded = nextValues.some(imp => 
+              (IMPROVEMENT_TO_AMENITIES[imp] || []).includes(amenity)
+            );
+            if (!stillNeeded) {
+              newAmenities.delete(amenity);
+            }
+          });
+        }
+        updatedForm.amenities = Array.from(newAmenities);
+      }
+
+      if (field === 'amenities') {
+        // When amenity is toggled, auto-update improvements
+        const newImprovements = new Set([...prev.improvements] || []);
+        
+        if (nextValues.includes(value)) {
+          // Adding an amenity - suggest related improvements
+          const relatedImprovements = AMENITIES_TO_IMPROVEMENTS[value] || [];
+          relatedImprovements.forEach(imp => newImprovements.add(imp));
+        } else {
+          // Removing an amenity - check if improvement should be removed
+          const relatedImprovements = AMENITIES_TO_IMPROVEMENTS[value] || [];
+          relatedImprovements.forEach(imp => {
+            // Only remove if no other amenity needs this improvement
+            const stillNeeded = nextValues.some(amenity => 
+              (AMENITIES_TO_IMPROVEMENTS[amenity] || []).includes(imp)
+            );
+            if (!stillNeeded) {
+              newImprovements.delete(imp);
+            }
+          });
+        }
+        updatedForm.improvements = Array.from(newImprovements);
+      }
+
+      return updatedForm;
+    });
+    setEstimationError('');
+    setEstimationSuccess('');
+  };
+
+  const validateEstimationForm = () => {
+    if (!estimationForm.propertyTitle.trim()) return 'Property title is required';
+    if (!estimationForm.locationType) return 'Location type is required';
+    if (!estimationForm.areaSqFt || Number(estimationForm.areaSqFt) <= 0) return 'Area must be greater than 0';
+    if (!estimationForm.basePricePerSqFt || Number(estimationForm.basePricePerSqFt) <= 0) return 'Base price per sq.ft must be greater than 0';
+    if (!estimationForm.propertyAgeBand) return 'Property age is required';
+    return '';
+  };
+
+  const resetEstimationForm = () => {
+    setEstimationForm({
+      propertyTitle: '',
+      locationType: '',
+      areaSqFt: '',
+      basePricePerSqFt: '',
+      propertyAgeBand: '',
+      amenities: [],
+      improvements: [],
+    });
+    setEstimationResult(null);
+    setEstimationError('');
+    setEstimationSuccess('');
+  };
+
+  const handleCalculateEstimation = async (e) => {
+    e.preventDefault();
+
+    const validationMessage = validateEstimationForm();
+    if (validationMessage) {
+      setEstimationError(validationMessage);
+      return;
+    }
+
+    setEstimationLoading(true);
+    setEstimationError('');
+    setEstimationSuccess('');
+
+    try {
+      const payload = {
+        propertyTitle: estimationForm.propertyTitle.trim(),
+        locationType: estimationForm.locationType,
+        areaSqFt: Number(estimationForm.areaSqFt),
+        basePricePerSqFt: Number(estimationForm.basePricePerSqFt),
+        propertyAgeBand: estimationForm.propertyAgeBand,
+        amenities: estimationForm.amenities,
+        improvements: estimationForm.improvements,
+      };
+
+      const response = await api.calculatePropertyEstimation(payload);
+      setEstimationResult(response);
+      setEstimationSuccess('Estimation calculated successfully');
+    } catch (error) {
+      setEstimationResult(null);
+      setEstimationError(error.message || 'Failed to calculate estimation');
+    } finally {
+      setEstimationLoading(false);
+    }
+  };
+
+  const handleSaveEstimationResult = async () => {
+    if (!estimationResult || !selectedProperty) {
+      alert('No estimation result to save');
+      return;
+    }
+
+    try {
+      // Prepare estimate payload from calculation result
+      const estimatePayload = {
+        propertyId: selectedProperty.id,
+        totalCost: estimationResult.improvedPropertyValue - estimationResult.currentPropertyValue,
+        valueIncreasePercent: ((estimationResult.improvedPropertyValue - estimationResult.currentPropertyValue) / estimationResult.currentPropertyValue * 100).toFixed(2),
+        estimatedNewValue: estimationResult.improvedPropertyValue,
+        adminNotes: `Calculated Estimation: ${estimationResult.recommendationMessage}`
+      };
+
+      // Save the estimate to backend
+      await api.saveEstimate(selectedProperty.id, estimatePayload);
+
+      alert('Estimation saved successfully! Homeowner will see the update on their dashboard.');
+
+      // Update localStorage for homeowner if applicable
+      const homeownerEmail = selectedProperty.ownerEmail;
+      const updatedSubmission = {
+        ...selectedProperty,
+        adminEstimate: {
+          totalCost: estimatePayload.totalCost,
+          valueIncreasePercent: estimatePayload.valueIncreasePercent,
+          estimatedNewValue: estimatePayload.estimatedNewValue,
+          adminNotes: estimatePayload.adminNotes
+        },
+        status: 'Estimated'
+      };
+
+      // Save to homeowner's property data
+      const homeownerPropertyData = JSON.parse(localStorage.getItem('propertyData') || '{}');
+      if (homeownerPropertyData.ownerEmail === homeownerEmail || homeownerPropertyData.id === selectedProperty.id) {
+        homeownerPropertyData.adminEstimate = updatedSubmission.adminEstimate;
+        homeownerPropertyData.status = 'Estimated';
+        localStorage.setItem('propertyData', JSON.stringify(homeownerPropertyData));
+      }
+
+      // Save to homeowner-specific estimates
+      const homeownerEstimates = JSON.parse(localStorage.getItem(`estimates_${homeownerEmail}`) || '[]');
+      homeownerEstimates.unshift({
+        submissionId: selectedProperty.id,
+        ...updatedSubmission.adminEstimate,
+        propertyType: selectedProperty.propertyType,
+        city: selectedProperty.city,
+        estimatedDate: new Date().toISOString()
+      });
+      localStorage.setItem(`estimates_${homeownerEmail}`, JSON.stringify(homeownerEstimates.slice(0, 10)));
+
+      // Add history entry for homeowner
+      const homeownerHistory = JSON.parse(localStorage.getItem(`homeownerHistory_${homeownerEmail}`) || '[]');
+      homeownerHistory.unshift({
+        id: Date.now(),
+        action: 'Estimate Received',
+        details: `Your property has been estimated. New value: ₹${Number(estimationResult.improvedPropertyValue).toLocaleString('en-IN')}`,
+        propertyDetails: selectedProperty,
+        estimateData: updatedSubmission.adminEstimate,
+        timestamp: new Date().toISOString()
+      });
+      localStorage.setItem(`homeownerHistory_${homeownerEmail}`, JSON.stringify(homeownerHistory.slice(0, 50)));
+
+      // Add to admin history
+      addToHistory('Estimation Saved', selectedProperty.ownerName, `Estimated value: ₹${Number(estimationResult.improvedPropertyValue).toLocaleString('en-IN')}`);
+
+      // Close modal and refresh
+      setShowEstimationModal(false);
+      setEstimationResult(null);
+      resetEstimationForm();
+      await loadPropertySubmissions();
+
+    } catch (err) {
+      console.error(err);
+      alert('Error saving estimation');
+    }
   };
 
   const handleImprovementCostChange = (improvement, value) => {
@@ -191,23 +677,38 @@ const AdminDashboard = () => {
       setEstimateData(prev => ({ ...prev, estimatedNewValue: newValue.toString() }));
     }
   };
+const handleSaveEstimate = async () => {
+  if (!selectedProperty || !selectedProperty.id) {
+    alert("No property selected");
+    return;
+  }
 
-  const handleSaveEstimate = () => {
-    if (!selectedProperty) return;
+  try {
+    const estimatePayload = {
+      propertyId: selectedProperty.id,
+      totalCost: parseFloat(estimateData.totalCost || 0),
+      valueIncreasePercent: parseFloat(estimateData.valueIncreasePercent || 0),
+      estimatedNewValue: parseFloat(estimateData.estimatedNewValue || 0),
+      adminNotes: estimateData.adminNotes || "",
+    };
 
-    // Update the submission with estimate data
+    console.log("Sending:", estimatePayload);
+
+    await api.saveEstimate(selectedProperty.id, estimatePayload);
+
+    alert("Estimate saved successfully!");
+
+    // Update localStorage with estimate
     const updatedSubmission = {
       ...selectedProperty,
-      status: 'Estimated',
       adminEstimate: {
-        improvementCosts: estimateData.improvementCosts,
         totalCost: estimateData.totalCost,
         valueIncreasePercent: estimateData.valueIncreasePercent,
         estimatedNewValue: estimateData.estimatedNewValue,
-        adminNotes: estimateData.adminNotes,
-        estimatedDate: new Date().toISOString(),
-        estimatedBy: userData?.email || localStorage.getItem('userEmail')
-      }
+        improvementCosts: estimateData.improvementCosts,
+        adminNotes: estimateData.adminNotes
+      },
+      status: 'Estimated'
     };
 
     localStorage.setItem(selectedProperty.id, JSON.stringify(updatedSubmission));
@@ -258,15 +759,17 @@ const AdminDashboard = () => {
     addToHistory('Estimate Provided', selectedProperty.ownerName, `Total: ₹${parseInt(estimateData.totalCost).toLocaleString('en-IN')}, Value Increase: ${estimateData.valueIncreasePercent}%`);
 
     setShowEstimateModal(false);
-    loadPropertySubmissions();
+    await loadPropertySubmissions();
     alert('Estimate saved and sent to homeowner successfully!');
-  };
+
+  } catch (err) {
+    console.error(err);
+    alert("Error saving estimate");
+  }
+};
 
   const handleLogout = () => {
-    localStorage.removeItem('isLoggedIn');
-    localStorage.removeItem('userData');
-    localStorage.removeItem('userType');
-    localStorage.removeItem('userEmail');
+    clearSession();
     navigate('/');
   };
 
@@ -377,7 +880,7 @@ const AdminDashboard = () => {
                             {property.status === 'Approved' && (
                               <button 
                                 className="action-btn estimate-btn" 
-                                onClick={() => handleOpenEstimate(property)}
+                                onClick={() => openEstimationFromProperty(property)}
                                 title="Provide Estimate"
                               >
                                 💰 ESTIMATE
@@ -681,6 +1184,209 @@ const AdminDashboard = () => {
                 💾 Save & Update to Homeowner
               </button>
               <button className="btn btn-secondary" onClick={() => setShowEstimateModal(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Estimation Modal - Auto-filled from Property */}
+      {showEstimationModal && selectedProperty && (
+        <div className="modal-overlay" onClick={() => setShowEstimationModal(false)}>
+          <div className="modal-content estimation-modal-large" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Property Value Estimation</h2>
+              <button className="close-btn" onClick={() => setShowEstimationModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              {estimationError && (
+                <div className="alert alert-error estimation-alert">
+                  <span className="alert-icon">⚠️</span>
+                  {estimationError}
+                </div>
+              )}
+
+              {estimationSuccess && (
+                <div className="alert alert-success estimation-alert">
+                  <span className="alert-icon">✓</span>
+                  {estimationSuccess}
+                </div>
+              )}
+
+              <div className="estimation-info-box">
+                <p><strong>Property:</strong> {selectedProperty.ownerName} - {formatPropertyType(selectedProperty.propertyType)} in {selectedProperty.city}</p>
+                <p><strong>Current Value:</strong> ₹{parseInt(selectedProperty.propertyValue).toLocaleString('en-IN')} | <strong>Area:</strong> {selectedProperty.builtUpArea} sq.ft</p>
+              </div>
+
+              <form className="estimation-form" onSubmit={handleCalculateEstimation}>
+                <div className="estimation-grid">
+                  <div className="form-field">
+                    <label>Property Name / Title *</label>
+                    <input
+                      type="text"
+                      value={estimationForm.propertyTitle}
+                      onChange={(e) => handleEstimationChange('propertyTitle', e.target.value)}
+                      placeholder="e.g., Green Villa"
+                    />
+                  </div>
+
+                  <div className="form-field">
+                    <label>Location Type *</label>
+                    <select
+                      value={estimationForm.locationType}
+                      onChange={(e) => handleEstimationChange('locationType', e.target.value)}
+                    >
+                      <option value="">Select location type</option>
+                      {ESTIMATION_LOCATION_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-field">
+                    <label>Area (sq.ft) *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={estimationForm.areaSqFt}
+                      onChange={(e) => handleEstimationChange('areaSqFt', e.target.value)}
+                      placeholder="e.g., 1200"
+                    />
+                  </div>
+
+                  <div className="form-field">
+                    <label>Base Price per sq.ft *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={estimationForm.basePricePerSqFt}
+                      onChange={(e) => handleEstimationChange('basePricePerSqFt', e.target.value)}
+                      placeholder="e.g., 4500"
+                    />
+                  </div>
+
+                  <div className="form-field">
+                    <label>Property Age *</label>
+                    <select
+                      value={estimationForm.propertyAgeBand}
+                      onChange={(e) => handleEstimationChange('propertyAgeBand', e.target.value)}
+                    >
+                      <option value="">Select age band</option>
+                      {ESTIMATION_AGE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="estimation-options">
+                  <div className="estimation-option-group">
+                    <h3>Amenities</h3>
+                    <div className="checkbox-grid">
+                      {ESTIMATION_AMENITIES.map((amenity) => (
+                        <label key={amenity.value} className="checkbox-pill">
+                          <input
+                            type="checkbox"
+                            checked={estimationForm.amenities.includes(amenity.value)}
+                            onChange={() => toggleEstimationSelection('amenities', amenity.value)}
+                          />
+                          <span>{amenity.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="estimation-option-group">
+                    <h3>Improvements</h3>
+                    <div className="checkbox-grid">
+                      {ESTIMATION_IMPROVEMENTS.map((improvement) => (
+                        <label key={improvement.value} className="checkbox-pill">
+                          <input
+                            type="checkbox"
+                            checked={estimationForm.improvements.includes(improvement.value)}
+                            onChange={() => toggleEstimationSelection('improvements', improvement.value)}
+                          />
+                          <span>{improvement.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="estimation-actions">
+                  <button className="submit-estimation-btn" type="submit" disabled={estimationLoading}>
+                    {estimationLoading ? 'Calculating...' : 'Calculate Estimation'}
+                  </button>
+                </div>
+              </form>
+
+              {estimationResult && (
+                <div className="estimation-results">
+                  <h3>Estimation Result</h3>
+                  <div className="result-grid">
+                    <div className="result-card">
+                      <span className="result-label">Base Price</span>
+                      <span className="result-value">{formatRupees(estimationResult.basePrice)}</span>
+                    </div>
+                    <div className="result-card">
+                      <span className="result-label">Location Percentage</span>
+                      <span className="result-value">{estimationResult.locationPercentage}%</span>
+                    </div>
+                    <div className="result-card">
+                      <span className="result-label">Age Percentage</span>
+                      <span className="result-value">{estimationResult.agePercentage}%</span>
+                    </div>
+                    <div className="result-card">
+                      <span className="result-label">Total Amenities</span>
+                      <span className="result-value">{estimationResult.totalAmenitiesPercentage}%</span>
+                    </div>
+                    <div className="result-card">
+                      <span className="result-label">Total Improvements</span>
+                      <span className="result-value">{estimationResult.totalImprovementsPercentage}%</span>
+                    </div>
+                    <div className="result-card highlight">
+                      <span className="result-label">Current Property Value</span>
+                      <span className="result-value">{formatRupees(estimationResult.currentPropertyValue)}</span>
+                    </div>
+                    <div className="result-card highlight">
+                      <span className="result-label">Improved Property Value</span>
+                      <span className="result-value">{formatRupees(estimationResult.improvedPropertyValue)}</span>
+                    </div>
+                    <div className="result-card highlight">
+                      <span className="result-label">Estimated Value Increase</span>
+                      <span className="result-value">{formatRupees(estimationResult.estimatedValueIncrease)}</span>
+                    </div>
+                  </div>
+
+                  <div className="result-summary-table">
+                    <div className="summary-row">
+                      <span>Property</span>
+                      <strong>{estimationResult.propertyTitle}</strong>
+                    </div>
+                    <div className="summary-row">
+                      <span>Location Type</span>
+                      <strong>{estimationResult.locationType}</strong>
+                    </div>
+                    <div className="summary-row">
+                      <span>Property Age</span>
+                      <strong>{estimationResult.propertyAgeBand}</strong>
+                    </div>
+                    <div className="summary-row">
+                      <span>Recommendation</span>
+                      <strong>{estimationResult.recommendationMessage}</strong>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              {estimationResult && (
+                <button className="btn btn-primary" onClick={handleSaveEstimationResult}>
+                  💾 Save Estimation & Update Homeowner
+                </button>
+              )}
+              <button className="btn btn-secondary" onClick={() => setShowEstimationModal(false)}>Close</button>
             </div>
           </div>
         </div>
