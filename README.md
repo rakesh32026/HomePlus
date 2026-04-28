@@ -4,7 +4,9 @@ A comprehensive web application designed to help Indian middle-class homeowners 
 
 ## 🌐 Live Demo
 
-**[https://home-plus-three.vercel.app/](https://home-plus-three.vercel.app/)**
+**Frontend**: deploy to Render or your preferred static host.
+
+**Backend**: deploy the Spring Boot API to Render and connect it to Aiven MySQL.
 
 ## 📋 Project Overview
 
@@ -39,7 +41,7 @@ HomePlus is a property improvement recommendation platform that offers:
 - **Routing**: React Router DOM 7.13.0
 - **Build Tool**: Vite 8.0.0
 - **Styling**: CSS3 with custom styling
-- **Deployment**: Vercel
+- **Deployment**: Render
 
 ## 📁 Project Structure
 
@@ -96,6 +98,24 @@ npm run dev
 ```
 
 4. Open your browser and visit `http://localhost:5173`
+
+### Frontend Environment Variables
+
+For local development, the app uses the Vite proxy and talks to `http://localhost:8080` automatically.
+
+For production on Render, set the frontend environment variable below so requests go to the deployed backend:
+
+```bash
+VITE_API_BASE_URL=https://<your-render-backend-service>/api
+```
+
+Also set this on the backend Render service so CORS allows the deployed frontend origin:
+
+```bash
+APP_CORS_ALLOWED_ORIGIN=https://<your-render-frontend-service>
+```
+
+If you deploy both frontend and backend on Render, the frontend should call the backend service URL directly through `VITE_API_BASE_URL`.
 
 ### Build for Production
 
