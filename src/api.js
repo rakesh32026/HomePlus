@@ -58,6 +58,20 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  sendOtp: (email) =>
+    request("/auth/send-otp", {
+      method: "POST",
+      headers: getHeaders(false),
+      body: JSON.stringify({ email }),
+    }),
+
+  verifyOtp: (email, otp) =>
+    request("/auth/verify-otp", {
+      method: "POST",
+      headers: getHeaders(false),
+      body: JSON.stringify({ email, otp }),
+    }),
+
   logout: () => {
     localStorage.removeItem("token");
     localStorage.removeItem("userEmail");
